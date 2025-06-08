@@ -43,7 +43,7 @@ class MineralImage5k(Dataset):
         with open(ann_path) as f:
             ann = json.load(f)
 
-        img_path = ann_path.replace("/ann/", "/img/").replace(".json", "")
+        img_path = ann_path.replace(f"{os.sep}ann{os.sep}", f"{os.sep}img{os.sep}").replace(".json", "")
         img = Image.open(img_path).convert("RGB")
         img = np.array(img)  # Albumentations expects numpy array
 
