@@ -26,7 +26,7 @@ from dataset import MineralImage5k
 
 def main():
     # Download datasets
-    dst_dir = os.path.expanduser('~/.cache/dataset-ninja')
+    dst_dir = os.path.expanduser('D:/Work/ICT_MU/work/Data_Science/dataset-ninja')
 
     dataset_path = os.path.join(dst_dir, 'mineralimage5k')
     if not os.path.exists(dataset_path):
