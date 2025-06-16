@@ -24,9 +24,14 @@ from sklearn.model_selection import KFold
 # import other python
 from dataset import MineralImage5k
 
+# import .env
+from dotenv import load_dotenv, dotenv_values
+
+load_dotenv()
+
 def main():
     # Download datasets
-    dst_dir = os.path.expanduser('D:/Work/ICT_MU/work/Data_Science/dataset-ninja')
+    dst_dir = os.path.expanduser(os.getenv("DATASET_DIR"))
 
     dataset_path = os.path.join(dst_dir, 'mineralimage5k')
     if not os.path.exists(dataset_path):
