@@ -26,6 +26,11 @@ from sklearn.model_selection import KFold
 # import other python
 from dataset import MineralImage5k
 
+# import .env
+from dotenv import load_dotenv, dotenv_values
+
+load_dotenv()
+
 
 def plot_training_curves(train_losses, val_maps, fold_num):
     """Plot training loss and validation mAP curves"""
@@ -171,7 +176,7 @@ def plot_loss_components(loss_history):
 
 def main():
     # Download datasets
-    dst_dir = os.path.expanduser('D:/Work/ICT_MU/work/Data_Science/dataset-ninja')
+    dst_dir = os.path.expanduser(os.getenv("DATASET_DIR"))
 
     dataset_path = os.path.join(dst_dir, 'mineralimage5k')
     if not os.path.exists(dataset_path):
@@ -368,8 +373,8 @@ def main():
     best_mAP_score = max([r.item() if hasattr(r, 'item') else r for r in all_mAPs_scores])
     
     # Save the model state dictionary
-    torch.save({'model_state_dict': model.state_dict(), 'train_loss': best_val_loss, 'mAP_score': best_mAP_score}, "D:\Work\LLM_project\CNNrockImprove\CNNrockImprove\models_saved\model.pth")
-    print("Model Saved")
+    # torch.save({'model_state_dict': model.state_dict(), 'train_loss': best_val_loss, 'mAP_score': best_mAP_score}, "model_brain.pth")
+    # print("Model Saved")
 
 if __name__ == "__main__":
     main()
