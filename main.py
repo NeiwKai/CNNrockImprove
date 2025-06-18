@@ -17,6 +17,8 @@ from tqdm import tqdm
 # Visualization
 from PIL import Image
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import numpy as np
 
 # Cross-Validation
 from sklearn.model_selection import KFold
@@ -28,6 +30,147 @@ from dataset import MineralImage5k
 from dotenv import load_dotenv, dotenv_values
 
 load_dotenv()
+
+def plot_training_curves(train_losses, val_maps, fold_num):
+    """Plot training loss and validation mAP curves"""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    
+    # Plot training loss
+    ax1.plot(train_losses, 'b-', label='Training Loss', linewidth=2)
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Loss')
+    ax1.set_title(f'Training Loss - Fold {fold_num}')
+    ax1.grid(True, alpha=0.3)
+    ax1.legend()
+    
+    # Plot validation mAP
+    ax2.plot(val_maps, 'r-', label='Validation mAP', linewidth=2)
+    ax2.set_xlabel('Epoch')
+    ax2.set_ylabel('mAP')
+    ax2.set_title(f'Validation mAP - Fold {fold_num}')
+    ax2.grid(True, alpha=0.3)
+    ax2.legend()
+    
+    plt.tight_layout()
+    plt.savefig(f'training_curves_fold_{fold_num}.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+def plot_cross_validation_results(all_fold_results):
+    """Plot results across all folds"""
+    fold_numbers = list(range(1, len(all_fold_results) + 1))
+    final_maps = [results['final_map'] for results in all_fold_results]
+    
+    plt.figure(figsize=(10, 6))
+    bars = plt.bar(fold_numbers, final_maps, color='skyblue', edgecolor='navy', alpha=0.7)
+    plt.axhline(y=np.mean(final_maps), color='red', linestyle='--', 
+                label=f'Mean mAP: {np.mean(final_maps):.4f}')
+    
+    # Add value labels on bars
+    for bar, map_val in zip(bars, final_maps):
+        plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
+                f'{map_val:.4f}', ha='center', va='bottom')
+    
+    plt.xlabel('Fold')
+    plt.ylabel('Final mAP')
+    plt.title('Cross-Validation Results')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('cross_validation_results.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+def visualize_predictions(model, dataset, device, num_samples=6, confidence_threshold=0.5):
+    """Visualize model predictions on sample images"""
+    model.eval()
+    
+    # Get random samples
+    indices = np.random.choice(len(dataset), num_samples, replace=False)
+    
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    axes = axes.flatten()
+    
+    class_names = ['background', 'class1', 'class2', 'class3', 'class4', 'class5', 'class6']  # Update with your actual class names
+    colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink']
+    
+    with torch.no_grad():
+        for i, idx in enumerate(indices):
+            image, target = dataset[idx]
+            
+            # Get prediction
+            image_tensor = image.unsqueeze(0).to(device)
+            prediction = model(image_tensor)[0]
+            
+            # Convert image to numpy for visualization
+            if image.shape[0] == 3:  # RGB
+                img_np = image.permute(1, 2, 0).cpu().numpy()
+            else:
+                img_np = image.squeeze().cpu().numpy()
+                img_np = np.stack([img_np] * 3, axis=-1)  # Convert to RGB
+            
+            # Denormalize if needed (adjust based on your preprocessing)
+            img_np = np.clip(img_np, 0, 1)
+            
+            ax = axes[i]
+            ax.imshow(img_np)
+            
+            # Draw ground truth boxes (green)
+            if 'boxes' in target:
+                gt_boxes = target['boxes'].cpu().numpy()
+                gt_labels = target['labels'].cpu().numpy()
+                
+                for box, label in zip(gt_boxes, gt_labels):
+                    x1, y1, x2, y2 = box
+                    rect = patches.Rectangle((x1, y1), x2-x1, y2-y1, 
+                                           linewidth=2, edgecolor='green', 
+                                           facecolor='none', linestyle='--')
+                    ax.add_patch(rect)
+                    ax.text(x1, y1-5, f'GT: {class_names[label]}', 
+                           color='green', fontsize=8, weight='bold')
+            
+            # Draw predictions (red)
+            pred_boxes = prediction['boxes'].cpu().numpy()
+            pred_labels = prediction['labels'].cpu().numpy()
+            pred_scores = prediction['scores'].cpu().numpy()
+            
+            for box, label, score in zip(pred_boxes, pred_labels, pred_scores):
+                if score > confidence_threshold:
+                    x1, y1, x2, y2 = box
+                    rect = patches.Rectangle((x1, y1), x2-x1, y2-y1, 
+                                           linewidth=2, edgecolor=colors[label % len(colors)], 
+                                           facecolor='none')
+                    ax.add_patch(rect)
+                    ax.text(x1, y2+15, f'{class_names[label]}: {score:.2f}', 
+                           color=colors[label % len(colors)], fontsize=8, weight='bold')
+            
+            ax.set_title(f'Sample {idx}')
+            ax.axis('off')
+    
+    plt.tight_layout()
+    plt.savefig('predictions_visualization.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+def plot_loss_components(loss_history):
+    """Plot different components of the loss if available"""
+    if not loss_history:
+        return
+    
+    # Extract loss components
+    epochs = range(1, len(loss_history) + 1)
+    
+    plt.figure(figsize=(12, 8))
+    
+    # If you track individual loss components, plot them separately
+    total_losses = [sum(loss_dict.values()) for loss_dict in loss_history]
+    plt.plot(epochs, total_losses, 'b-', linewidth=2, label='Total Loss')
+    
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training Loss Components')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('loss_components.png', dpi=300, bbox_inches='tight')
+    plt.show()
 
 def main():
     # Download datasets
@@ -75,6 +218,9 @@ def main():
     train_metrics = []
     val_metrics = []
 
+    all_fold_results = []
+    all_train_losses = []
+    all_mAPs_scores = []
     k_fold = KFold(n_splits=K_FOLDS, shuffle=True)
     results = {}
 
@@ -116,6 +262,9 @@ def main():
             avg_train_loss = train_loss / len(train_loader)
             print(f"Average Train Loss: {avg_train_loss:.4f}")
 
+            all_train_losses.append(avg_train_loss)
+            # Store training metrics
+
             metric = MeanAveragePrecision()
             # Validation
             model.eval()
@@ -134,6 +283,12 @@ def main():
                     metric.update(outputs, targets)
             # Compute final result
             result = metric.compute()
+            all_mAPs_scores.append(result['map'])
+            all_fold_results.append({
+                'train_losses': all_train_losses[-N_EPOCHS:],  # Last N_EPOCHS entries
+                'val_maps': all_mAPs_scores[-N_EPOCHS:],       # Last N_EPOCHS entries
+                'final_map': all_mAPs_scores[-1].item() if hasattr(all_mAPs_scores[-1], 'item') else all_mAPs_scores[-1]
+                })
             print(f"mAP: {result['map']:.4f}")
 
     # Test
@@ -166,10 +321,62 @@ def main():
     # Step 6: Print results
     print(f"mAP: {result['map']:.4f}")
     
+    # Step 7: Visualize predictions
+    print("Visualizing predictions...")
+    visualize_predictions(model, dataset, device, num_samples=6, confidence_threshold=0.5)
+    
+    plt.figure(figsize=(10, 6))
+
+     # Plot 1: Training curves for all folds
+    plt.subplot(2, 2, 1)
+    for i, fold_result in enumerate(all_fold_results):
+        plt.plot(fold_result['train_losses'], label=f'Fold {i+1}', alpha=0.7)
+    plt.xlabel('Epoch')
+    plt.ylabel('Training Loss')
+    plt.title('Training Loss - All Folds')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 2: Validation mAP for all folds
+    plt.subplot(2, 2, 2)
+    for i, fold_result in enumerate(all_fold_results):
+        plt.plot(fold_result['val_maps'], label=f'Fold {i+1}', alpha=0.7)
+    plt.xlabel('Epoch')
+    plt.ylabel('Validation mAP')
+    plt.title('Validation mAP - All Folds')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 3: Final mAP per fold
+    plt.subplot(2, 2, 3)
+    fold_nums = list(range(1, len(all_mAPs_scores) + 1))
+    final_maps = [r.item() if hasattr(r, 'item') else r for r in all_mAPs_scores]
+    plt.bar(fold_nums, final_maps, alpha=0.7, color='skyblue')
+    plt.xlabel('Fold')
+    plt.ylabel('Final mAP')
+    plt.title('Final mAP per Fold')
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 4: Summary statistics
+    plt.subplot(2, 2, 4)
+    plt.text(0.1, 0.8, f"Mean mAP: {np.mean(final_maps):.4f}", fontsize=12, transform=plt.gca().transAxes)
+    plt.text(0.1, 0.7, f"Std mAP: {np.std(final_maps):.4f}", fontsize=12, transform=plt.gca().transAxes)
+    plt.text(0.1, 0.6, f"Final Test mAP: {results['map']:.4f}", fontsize=12, transform=plt.gca().transAxes)
+    plt.text(0.1, 0.5, f"Number of Folds: {K_FOLDS}", fontsize=12, transform=plt.gca().transAxes)
+    plt.text(0.1, 0.4, f"Epochs per Fold: {N_EPOCHS}", fontsize=12, transform=plt.gca().transAxes)
+    plt.title('Training Summary')
+    plt.axis('off')
+    
+    plt.tight_layout()
+    plt.savefig('training_summary.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    best_val_loss = min(all_train_losses)
+    best_mAP_score = max([r.item() if hasattr(r, 'item') else r for r in all_mAPs_scores])
+
     # Save the model
     torch.save(model.state_dict(), 'model_brain.pth')
-
-
+ 
 if __name__ == "__main__":
     main()
 
