@@ -40,7 +40,7 @@ def main():
         print("Dataset already cached!")
 
     # Split datasets
-    dataset = MineralImage5k(root_dir=dataset_path, max_files=500)
+    dataset = MineralImage5k(root_dir=dataset_path, max_files=2000)
     print(len(dataset))
 
     # device init
@@ -55,14 +55,19 @@ def main():
     model = fasterrcnn_mobilenet_v3_large_320_fpn()
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, 7)
+
+    if os.path.exists(os.getenv("MODEL_PTH")):
+        model.load_state_dict(torch.load(os.getenv("MODEL_PTH")))
+        print("successfully load the model!!!")
+
     model.to(device)
 
     # Tunning
     LEARNING_RATE = 7e-5
     WEIGHT_DECAY = 1e-6
-    K_FOLDS = 5
+    K_FOLDS = 10
     N_EPOCHS = 20
-    BATCH_SIZE = 64
+    BATCH_SIZE = 256
 
     # useful option init
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
@@ -160,7 +165,9 @@ def main():
 
     # Step 6: Print results
     print(f"mAP: {result['map']:.4f}")
-
+    
+    # Save the model
+    torch.save(model.state_dict(), 'model_brain.pth')
 
 
 if __name__ == "__main__":
