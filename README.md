@@ -4,7 +4,8 @@ This is an improve version from <a href="https://github.com/NeiwKai/CNNrockOS">U
 
 Dataset from <a href="https://datasetninja.com/mineral-image-5k">Dataset Ninja</a>. 
 
-.env file structure
+<h3><code>.env</code> file structure</h3>
+<br>
 <code>
   DATASET_DIR = {your directory of dataset}
 </code>
