@@ -17,12 +17,15 @@ from tqdm import tqdm
 # Visualization
 from PIL import Image
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+import numpy as np
 
 # Cross-Validation
 from sklearn.model_selection import KFold
 
 # import other python
 from dataset import MineralImage5k
+from visual import visualize_predictions
 
 # import .env
 from dotenv import load_dotenv, dotenv_values
@@ -75,6 +78,9 @@ def main():
     train_metrics = []
     val_metrics = []
 
+    all_fold_results = []
+    all_train_losses = []
+    all_mAPs_scores = []
     k_fold = KFold(n_splits=K_FOLDS, shuffle=True)
     results = {}
 
@@ -116,6 +122,9 @@ def main():
             avg_train_loss = train_loss / len(train_loader)
             print(f"Average Train Loss: {avg_train_loss:.4f}")
 
+            all_train_losses.append(avg_train_loss)
+            # Store training metrics
+
             metric = MeanAveragePrecision()
             # Validation
             model.eval()
@@ -134,6 +143,12 @@ def main():
                     metric.update(outputs, targets)
             # Compute final result
             result = metric.compute()
+            all_mAPs_scores.append(result['map'])
+            all_fold_results.append({
+                'train_losses': all_train_losses[-N_EPOCHS:],  # Last N_EPOCHS entries
+                'val_maps': all_mAPs_scores[-N_EPOCHS:],       # Last N_EPOCHS entries
+                'final_map': all_mAPs_scores[-1].item() if hasattr(all_mAPs_scores[-1], 'item') else all_mAPs_scores[-1]
+                })
             print(f"mAP: {result['map']:.4f}")
 
     # Test
@@ -166,10 +181,63 @@ def main():
     # Step 6: Print results
     print(f"mAP: {result['map']:.4f}")
     
+    # Step 7: Visualize predictions
+    print("Visualizing predictions...")
+    visualize_predictions(model, dataset, device, num_samples=6, confidence_threshold=0.5)
+    
+    plt.figure(figsize=(10, 6))
+
+     # Plot 1: Training curves for all folds
+    plt.subplot(2, 2, 1)
+    for i, fold_result in enumerate(all_fold_results):
+        plt.plot(fold_result['train_losses'], label=f'Fold {i+1}', alpha=0.7)
+    plt.xlabel('Epoch')
+    plt.ylabel('Training Loss')
+    plt.title('Training Loss - All Folds')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 2: Validation mAP for all folds
+    plt.subplot(2, 2, 2)
+    for i, fold_result in enumerate(all_fold_results):
+        plt.plot(fold_result['val_maps'], label=f'Fold {i+1}', alpha=0.7)
+    plt.xlabel('Epoch')
+    plt.ylabel('Validation mAP')
+    plt.title('Validation mAP - All Folds')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 3: Final mAP per fold
+    plt.subplot(2, 2, 3)
+    fold_nums = list(range(1, len(all_mAPs_scores) + 1))
+    final_maps = [r.item() if hasattr(r, 'item') else r for r in all_mAPs_scores]
+    plt.bar(fold_nums, final_maps, alpha=0.7, color='skyblue')
+    plt.xlabel('Fold')
+    plt.ylabel('Final mAP')
+    plt.title('Final mAP per Fold')
+    plt.grid(True, alpha=0.3)
+    
+    # Plot 4: Summary statistics
+    plt.subplot(2, 2, 4)
+    plt.text(0.1, 0.8, f"Mean mAP: {np.mean(final_maps):.4f}", fontsize=12, transform=plt.gca().transAxes)
+    plt.text(0.1, 0.7, f"Std mAP: {np.std(final_maps):.4f}", fontsize=12, transform=plt.gca().transAxes)
+    plt.text(0.1, 0.6, f"Final Test mAP: {results['map']:.4f}", fontsize=12, transform=plt.gca().transAxes)
+    plt.text(0.1, 0.5, f"Number of Folds: {K_FOLDS}", fontsize=12, transform=plt.gca().transAxes)
+    plt.text(0.1, 0.4, f"Epochs per Fold: {N_EPOCHS}", fontsize=12, transform=plt.gca().transAxes)
+    plt.title('Training Summary')
+    plt.axis('off')
+    
+    plt.tight_layout()
+    plt.savefig('training_summary.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    best_val_loss = min(all_train_losses)
+    best_mAP_score = max([r.item() if hasattr(r, 'item') else r for r in all_mAPs_scores])
+
     # Save the model
     torch.save(model.state_dict(), 'model_brain.pth')
-
-
+    print("Successfully save the model")
+ 
 if __name__ == "__main__":
     main()
 
