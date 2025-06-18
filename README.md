@@ -6,6 +6,4 @@ Dataset from <a href="https://datasetninja.com/mineral-image-5k">Dataset Ninja</
 
 <h3><code>.env</code> file structure</h3>
 <br>
-<code>
-DATASET_DIR = {your directory of dataset}
-</code>
+<code>DATASET_DIR = {your directory of dataset}</code>
