@@ -1,7 +1,7 @@
 # main.py
 
 import dataset_tools as dtools
-import os
+import os, time
 
 import torch
 from torch.utils.data import DataLoader, Dataset, Subset
@@ -33,6 +33,11 @@ from dotenv import load_dotenv, dotenv_values
 load_dotenv()
 
 def main():
+    # Get User input for maxfiles
+    MAX_FILES = int(input("Enter max files to train: "))
+    if not MAX_FILES or MAX_FILES % 6 != 0:
+        raise TypeError("Please give max files that can divided by 6")
+
     # Download datasets
     dst_dir = os.path.expanduser(os.getenv("DATASET_DIR"))
 
@@ -42,9 +47,11 @@ def main():
     else:
         print("Dataset already cached!")
 
+    START_TIME = time.perf_counter()
+
     # Split datasets
-    dataset = MineralImage5k(root_dir=dataset_path, max_files=2000)
-    print(len(dataset))
+    dataset = MineralImage5k(root_dir=dataset_path, max_files=MAX_FILES)
+    print(f'Total Datasets: {len(dataset)}')
 
     # device init
     if torch.cuda.is_available():
@@ -70,7 +77,7 @@ def main():
     WEIGHT_DECAY = 1e-6
     K_FOLDS = 10
     N_EPOCHS = 20
-    BATCH_SIZE = 256
+    BATCH_SIZE = 128
 
     # useful option init
     optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
@@ -180,6 +187,8 @@ def main():
 
     # Step 6: Print results
     print(f"mAP: {result['map']:.4f}")
+    END_TIME = time.perf_counter()
+    print(f"Operation taken: {END_TIME-START_TIME:.6f} seconds")
     
     # Step 7: Visualize predictions
     print("Visualizing predictions...")
