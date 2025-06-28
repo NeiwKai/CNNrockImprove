@@ -10,17 +10,81 @@ import numpy as np
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
+from collections import defaultdict
+
 def find_all_ann(root_dir, max_files=None):
     ann_paths = []
-    for subdir, dirs, files in os.walk(root_dir):
-        # Skip 'segm' directory
-        dirs[:] = [d for d in dirs if d != 'segm']
+    all_dirs = sorted([
+        d for d in os.listdir(root_dir)
+        if os.path.isdir(os.path.join(root_dir, d)) and d != 'segm'
+    ])
 
-        for file in files:
-            if file.endswith(".json") and file != "meta.json":
-                ann_paths.append(os.path.join(subdir, file))
-                if max_files and len(ann_paths) >= max_files:
-                    return ann_paths
+    class_labels = ['stone', 'rock', 'mineral', 'gem', 'crystal', 'mineral ore']
+    total_classes = len(class_labels)
+    total_dirs = len(all_dirs)
+
+    max_per_class = max_files // total_classes if max_files else None
+    max_per_dir = max_files // total_dirs if max_files else None
+
+    count_class = defaultdict(int)
+    count_per_dir = defaultdict(int)
+
+    # Step 1: Pre-scan available counts per class
+    available_per_class = defaultdict(int)
+
+    for directory in all_dirs:
+        dir_path = os.path.join(root_dir, directory)
+        for subdir, _, files in os.walk(dir_path):
+            for file in files:
+                if file.endswith(".json") and file != "meta.json":
+                    try:
+                        with open(os.path.join(subdir, file)) as f:
+                            data = json.load(f)
+                        class_title = data.get("objects", [{}])[0].get("classTitle", None)
+                        if class_title in class_labels:
+                            available_per_class[class_title] += 1
+                    except Exception:
+                        continue
+
+    # Adjust max_per_class down if data is insufficient
+    adjusted_max_per_class = {
+        label: min(available_per_class[label], max_per_class)
+        for label in class_labels
+    }
+
+    print("Available samples per class:", dict(available_per_class))
+    print("Adjusted max per class:", adjusted_max_per_class)
+
+    # Step 2: Collect files respecting folder and adjusted class caps
+    for directory in all_dirs:
+        dir_path = os.path.join(root_dir, directory)
+        for subdir, _, files in os.walk(dir_path):
+            for file in files:
+                if file.endswith(".json") and file != "meta.json":
+                    full_path = os.path.join(subdir, file)
+                    try:
+                        with open(full_path) as f:
+                            data = json.load(f)
+                        class_title = data.get("objects", [{}])[0].get("classTitle", None)
+                        if class_title not in class_labels:
+                            continue
+                    except Exception:
+                        continue
+
+                    # Check class and folder limits
+                    if count_class[class_title] < adjusted_max_per_class[class_title]:
+                        # Add sample, even if folder is "full"
+                        ann_paths.append(full_path)
+                        count_class[class_title] += 1
+                        count_per_dir[directory] += 1
+
+                    if max_files and len(ann_paths) >= max_files:
+                        print("Final class counts:", dict(count_class))
+                        print("Final directory counts:", dict(count_per_dir))
+                        return ann_paths
+
+    print("Final class counts:", dict(count_class))
+    print("Final directory counts:", dict(count_per_dir))
     return ann_paths
 
 class MineralImage5k(Dataset):
